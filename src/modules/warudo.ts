@@ -26,12 +26,34 @@ export const warudoModule: WebDeckModule = {
       placeholder: "19190",
       required: true,
     },
+  ],
+  events: [
     {
-      key: "path",
-      label: "Path",
-      type: "text",
-      defaultValue: "",
-      placeholder: "/",
+      id: "send-action",
+      name: "Send Action",
+      description: "Send a Warudo action with a data value.",
+      parameterFields: [
+        {
+          key: "action",
+          label: "Action",
+          type: "text",
+          defaultValue: "Pixelate",
+          placeholder: "Pixelate",
+          required: true,
+        },
+        {
+          key: "data",
+          label: "Data",
+          type: "text",
+          defaultValue: "json value",
+          required: false,
+        },
+      ],
+      buildMessage: ({ params }) =>
+        JSON.stringify({
+          action: params.action,
+          data: JSON.parse(params.data),
+        }),
     },
   ],
   createController: (host) => createWarudoController(host),
@@ -48,11 +70,15 @@ function createWarudoController(
     host.setStatus(nextStatus);
   };
 
+  const send = (message: string) => {
+    socket?.send(message);
+    host.log("outgoing", message);
+  };
+
   return {
     connect() {
       const config = host.getConfig();
-      const path = config.path ? `/${config.path.replace(/^\/+/, "")}` : "";
-      const url = `ws://${config.host}:${config.port}${path}`;
+      const url = `ws://${config.host}:${config.port}`;
 
       socket?.close(1000, "Replacing connection");
       setStatus("connecting");
@@ -93,6 +119,19 @@ function createWarudoController(
     },
     getStatus() {
       return status;
+    },
+    triggerEvent(event, params) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        host.log("error", `${event.name} requires an active Warudo connection.`);
+        return;
+      }
+
+      if (!event.buildMessage) {
+        host.log("error", `${event.name} has no message builder.`);
+        return;
+      }
+
+      send(event.buildMessage({ config: host.getConfig(), params }));
     },
   };
 }
