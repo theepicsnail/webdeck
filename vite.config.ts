@@ -18,8 +18,9 @@ export default defineConfig({
             return "[name].js";
           }
 
-          return "assets/[name]-[hash].js";
+          return "assets/[name].js";
         },
+        assetFileNames: "assets/[name][extname]",
       },
     },
   },
