@@ -26,6 +26,10 @@ body {
   margin: 0;
 }
 
+body.deck-fullscreen {
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -358,12 +362,31 @@ h3 {
   padding: 16px;
 }
 
+.deck-panel[data-fullscreen="true"] {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  padding: 16px;
+}
+
 .deck-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.deck-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .system-panel {
@@ -392,6 +415,11 @@ h3 {
   align-items: start;
 }
 
+.deck-panel[data-fullscreen="true"] .deck-layout {
+  flex: 1;
+  min-height: 0;
+}
+
 .deck-layout[data-edit-mode="true"] {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
 }
@@ -404,6 +432,21 @@ h3 {
   width: min(100%, calc(100vh - 18px - 18px - 46px - 32px - 48px));
   aspect-ratio: 1;
   justify-self: center;
+}
+
+.deck-panel[data-fullscreen="true"] .deck-grid {
+  width: min(100%, calc(100dvh - 32px - 44px - 12px));
+  max-height: calc(100dvh - 32px - 44px - 12px);
+  align-self: center;
+}
+
+.deck-panel[data-fullscreen="true"] .deck-layout[data-edit-mode="true"] .deck-grid {
+  width: min(100%, calc(100dvh - 32px - 44px - 12px));
+}
+
+.deck-panel[data-fullscreen="true"] .deck-config-panel {
+  max-height: calc(100dvh - 32px - 44px - 12px);
+  overflow: auto;
 }
 
 .deck-button {
@@ -745,11 +788,21 @@ pre {
     width: min(100%, calc(100vh - 12px - 12px - 92px - 32px - 48px));
   }
 
+  .deck-panel[data-fullscreen="true"] {
+    padding: 12px;
+  }
+
+  .deck-panel[data-fullscreen="true"] .deck-grid {
+    width: min(100%, calc(100dvh - 24px - 92px - 12px));
+    max-height: calc(100dvh - 24px - 92px - 12px);
+  }
+
   .deck-layout[data-edit-mode="true"] {
     grid-template-columns: 1fr;
   }
 
   .deck-toolbar,
+  .deck-toolbar-controls,
   .system-actions,
   .config-file-actions {
     align-items: stretch;

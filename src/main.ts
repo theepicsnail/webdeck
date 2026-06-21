@@ -62,6 +62,7 @@ let settingsModuleId: string | null = null;
 let activeView: AppView = "modules";
 let appTheme: AppTheme = readStoredTheme();
 let isDeckEditMode = false;
+let isDeckFullscreen = false;
 let selectedDeckButton = 0;
 let deckButtons = readStoredDeckButtons();
 
@@ -119,12 +120,15 @@ appRoot.innerHTML = `
         </section>
       </section>
 
-      <section class="view-panel deck-panel" data-view-panel="deck">
+      <section class="view-panel deck-panel" data-view-panel="deck" id="deckPanel">
         <div class="deck-toolbar">
-          <label class="switch">
-            <input id="deckEditToggle" type="checkbox" />
-            <span>Edit Mode</span>
-          </label>
+          <div class="deck-toolbar-controls">
+            <label class="switch">
+              <input id="deckEditToggle" type="checkbox" />
+              <span>Edit Mode</span>
+            </label>
+            <button class="secondary" id="deckFullscreenButton" type="button">Fullscreen</button>
+          </div>
         </div>
         <div class="deck-layout" id="deckLayout">
           <div class="deck-grid" id="deckGrid"></div>
@@ -172,7 +176,9 @@ const statusText = query<HTMLSpanElement>("#statusText");
 const customModuleForm = query<HTMLFormElement>("#customModuleForm");
 const customModuleUrlInput = query<HTMLInputElement>("#customModuleUrlInput");
 const moduleGrid = query<HTMLDivElement>("#moduleGrid");
+const deckPanel = query<HTMLElement>("#deckPanel");
 const deckEditToggle = query<HTMLInputElement>("#deckEditToggle");
+const deckFullscreenButton = query<HTMLButtonElement>("#deckFullscreenButton");
 const themeToggle = query<HTMLInputElement>("#themeToggle");
 const themeLabel = query<HTMLSpanElement>("#themeLabel");
 const importConfigButton = query<HTMLButtonElement>("#importConfigButton");
@@ -292,6 +298,11 @@ deckEditToggle.addEventListener("change", () => {
   render();
 });
 
+deckFullscreenButton.addEventListener("click", () => {
+  isDeckFullscreen = !isDeckFullscreen;
+  render();
+});
+
 themeToggle.addEventListener("change", () => {
   appTheme = themeToggle.checked ? "dark" : "light";
   localStorage.setItem(THEME_STORAGE_KEY, appTheme);
@@ -398,6 +409,15 @@ deckConfigPanel.addEventListener("click", (event) => {
 clearButton.addEventListener("click", () => {
   logs = [];
   addLog("system", "System", "Log cleared.");
+  render();
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !isDeckFullscreen) {
+    return;
+  }
+
+  isDeckFullscreen = false;
   render();
 });
 
@@ -715,7 +735,11 @@ function renderConfigField(
 
 function renderDeck(): void {
   deckEditToggle.checked = isDeckEditMode;
+  deckPanel.dataset.fullscreen = String(isDeckFullscreen);
   deckLayout.dataset.editMode = String(isDeckEditMode);
+  document.body.classList.toggle("deck-fullscreen", isDeckFullscreen);
+  deckFullscreenButton.textContent = isDeckFullscreen ? "Exit Fullscreen" : "Fullscreen";
+  deckFullscreenButton.setAttribute("aria-pressed", String(isDeckFullscreen));
   deckConfigPanel.hidden = !isDeckEditMode;
   renderDeckButtons();
   deckConfigPanel.innerHTML = isDeckEditMode ? renderDeckConfigPanel() : "";
