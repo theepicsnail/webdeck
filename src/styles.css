@@ -1,12 +1,19 @@
 :root {
   color: #17211a;
   background: #f6f3ea;
+  color-scheme: light;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] {
+  color: #edf3ef;
+  background: #111713;
+  color-scheme: dark;
 }
 
 * {
@@ -64,6 +71,13 @@ button:disabled {
     #f6f3ea;
 }
 
+:root[data-theme="dark"] .shell {
+  background:
+    linear-gradient(135deg, rgba(69, 158, 113, 0.16), transparent 36%),
+    linear-gradient(315deg, rgba(211, 109, 79, 0.12), transparent 42%),
+    #111713;
+}
+
 .workspace {
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -100,6 +114,12 @@ h2 {
   font-weight: 720;
 }
 
+:root[data-theme="dark"] .status-pill {
+  border-color: rgba(237, 243, 239, 0.14);
+  background: rgba(30, 40, 34, 0.82);
+  color: #b9c7be;
+}
+
 .status-dot {
   width: 10px;
   height: 10px;
@@ -124,11 +144,24 @@ h2 {
 .module-card,
 .settings-page,
 .deck-panel,
+.system-panel,
 .log-panel {
   border: 1px solid rgba(23, 33, 26, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 18px 44px rgba(37, 45, 39, 0.08);
+}
+
+:root[data-theme="dark"] .module-section,
+:root[data-theme="dark"] .custom-loader,
+:root[data-theme="dark"] .module-card,
+:root[data-theme="dark"] .settings-page,
+:root[data-theme="dark"] .deck-panel,
+:root[data-theme="dark"] .system-panel,
+:root[data-theme="dark"] .log-panel {
+  border-color: rgba(237, 243, 239, 0.12);
+  background: rgba(24, 32, 27, 0.86);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
 }
 
 .view-tabs {
@@ -142,9 +175,18 @@ h2 {
   background: #31443a;
 }
 
+:root[data-theme="dark"] .tab-button {
+  background: #26362e;
+}
+
 .tab-button.active {
   background: #245f42;
   box-shadow: 0 10px 20px rgba(36, 95, 66, 0.18);
+}
+
+:root[data-theme="dark"] .tab-button.active {
+  background: #2f8b5e;
+  box-shadow: 0 10px 20px rgba(47, 139, 94, 0.22);
 }
 
 .view-panel[hidden] {
@@ -164,6 +206,14 @@ h2 {
   max-width: 680px;
   margin: 6px 0 0;
   color: #5a6a60;
+}
+
+:root[data-theme="dark"] .custom-loader p,
+:root[data-theme="dark"] .section-header p,
+:root[data-theme="dark"] .settings-header p,
+:root[data-theme="dark"] .deck-config-header p,
+:root[data-theme="dark"] .log-header span {
+  color: #a9b7ae;
 }
 
 .module-section {
@@ -197,6 +247,16 @@ h2 {
   background: #fffdf7;
   box-shadow: none;
   cursor: pointer;
+}
+
+:root[data-theme="dark"] .module-card,
+:root[data-theme="dark"] .settings-page,
+:root[data-theme="dark"] .deck-button,
+:root[data-theme="dark"] .deck-config-panel,
+:root[data-theme="dark"] .log-entry,
+:root[data-theme="dark"] .url-preview code {
+  background: #202a24;
+  color: #edf3ef;
 }
 
 .settings-page {
@@ -253,6 +313,10 @@ h3 {
   font-weight: 760;
 }
 
+:root[data-theme="dark"] .module-state {
+  color: #b9c7be;
+}
+
 .module-card[data-state="connected"] .module-title-row .status-dot {
   background: #238252;
 }
@@ -302,7 +366,21 @@ h3 {
   margin-bottom: 12px;
 }
 
-.deck-file-actions {
+.system-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.system-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.config-file-actions {
   display: flex;
   gap: 8px;
 }
@@ -357,6 +435,15 @@ h3 {
   background: #eef4ef;
 }
 
+:root[data-theme="dark"] .deck-button {
+  border-color: rgba(237, 243, 239, 0.14);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="dark"] .deck-button:hover:not(:disabled) {
+  background: #28362e;
+}
+
 .deck-config-panel {
   display: grid;
   gap: 14px;
@@ -364,6 +451,10 @@ h3 {
   border-radius: 8px;
   padding: 14px;
   background: #fffdf7;
+}
+
+:root[data-theme="dark"] .deck-config-panel {
+  border-color: rgba(237, 243, 239, 0.12);
 }
 
 .deck-config-panel[hidden] {
@@ -400,6 +491,11 @@ h3 {
   font-weight: 760;
 }
 
+:root[data-theme="dark"] .url-preview span,
+:root[data-theme="dark"] .field span {
+  color: #c5d1c9;
+}
+
 .url-preview code {
   display: flex;
   align-items: center;
@@ -414,6 +510,10 @@ h3 {
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   font-size: 0.86rem;
   white-space: nowrap;
+}
+
+:root[data-theme="dark"] .url-preview code {
+  border-color: rgba(237, 243, 239, 0.16);
 }
 
 .field {
@@ -438,11 +538,26 @@ textarea {
   outline: 0;
 }
 
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+  border-color: rgba(237, 243, 239, 0.16);
+  background: #111713;
+  color: #edf3ef;
+}
+
 input:focus,
 select:focus,
 textarea:focus {
   border-color: #2b8056;
   box-shadow: 0 0 0 4px rgba(43, 128, 86, 0.14);
+}
+
+:root[data-theme="dark"] input:focus,
+:root[data-theme="dark"] select:focus,
+:root[data-theme="dark"] textarea:focus {
+  border-color: #45a36f;
+  box-shadow: 0 0 0 4px rgba(69, 163, 111, 0.18);
 }
 
 input {
@@ -476,8 +591,16 @@ textarea {
   background: #31443a;
 }
 
+:root[data-theme="dark"] .secondary {
+  background: #3c4f44;
+}
+
 .secondary:hover:not(:disabled) {
   background: #26362e;
+}
+
+:root[data-theme="dark"] .secondary:hover:not(:disabled) {
+  background: #485e51;
 }
 
 .log-panel {
@@ -528,6 +651,10 @@ textarea {
   background: #fffdf7;
 }
 
+:root[data-theme="dark"] .log-entry {
+  color: #edf3ef;
+}
+
 .log-entry[data-direction="incoming"] {
   border-color: #287bb0;
 }
@@ -556,6 +683,10 @@ textarea {
   text-transform: uppercase;
 }
 
+:root[data-theme="dark"] .log-meta {
+  color: #a9b7ae;
+}
+
 pre {
   max-width: 100%;
   margin: 0;
@@ -565,6 +696,10 @@ pre {
   color: #17211a;
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   font-size: 0.9rem;
+}
+
+:root[data-theme="dark"] pre {
+  color: #edf3ef;
 }
 
 @media (max-width: 780px) {
@@ -615,7 +750,8 @@ pre {
   }
 
   .deck-toolbar,
-  .deck-file-actions {
+  .system-actions,
+  .config-file-actions {
     align-items: stretch;
     flex-direction: column;
   }

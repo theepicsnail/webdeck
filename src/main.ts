@@ -16,7 +16,8 @@ type LogEntry = {
   timestamp: Date;
 };
 
-type AppView = "modules" | "deck" | "log";
+type AppView = "modules" | "deck" | "system";
+type AppTheme = "light" | "dark";
 
 type ModuleRuntime = {
   module: WebDeckModule;
@@ -49,6 +50,7 @@ const CONFIG_STORAGE_PREFIX = "webdeck.config.";
 const ENABLED_STORAGE_PREFIX = "webdeck.enabled.";
 const CUSTOM_MODULES_STORAGE_KEY = "webdeck.customModules";
 const DECK_STORAGE_KEY = "webdeck.deckButtons";
+const THEME_STORAGE_KEY = "webdeck.theme";
 const BUILT_IN_MODULE_URLS = import.meta.env.DEV
   ? ["/src/modules/obs.ts", "/src/modules/warudo.ts", "/src/modules/vtube-studio.ts"]
   : ["./obs.js", "./warudo.js", "./vtube-studio.js"];
@@ -58,6 +60,7 @@ let logs: LogEntry[] = [];
 let nextLogId = 1;
 let settingsModuleId: string | null = null;
 let activeView: AppView = "modules";
+let appTheme: AppTheme = readStoredTheme();
 let isDeckEditMode = false;
 let selectedDeckButton = 0;
 let deckButtons = readStoredDeckButtons();
@@ -77,7 +80,7 @@ appRoot.innerHTML = `
         <nav class="view-tabs" aria-label="Primary views">
           <button class="tab-button" data-view="modules" type="button">Modules</button>
           <button class="tab-button" data-view="deck" type="button">Deck</button>
-          <button class="tab-button" data-view="log" type="button">Log</button>
+          <button class="tab-button" data-view="system" type="button">System</button>
         </nav>
         <div class="status-pill" data-state="disabled" id="statusPill">
           <span class="status-dot" aria-hidden="true"></span>
@@ -122,11 +125,6 @@ appRoot.innerHTML = `
             <input id="deckEditToggle" type="checkbox" />
             <span>Edit Mode</span>
           </label>
-          <div class="deck-file-actions">
-            <button class="secondary" id="importConfigButton" type="button">Import</button>
-            <button class="primary" id="exportConfigButton" type="button">Export</button>
-            <input id="importConfigInput" type="file" accept="application/json,.json" hidden />
-          </div>
         </div>
         <div class="deck-layout" id="deckLayout">
           <div class="deck-grid" id="deckGrid"></div>
@@ -134,7 +132,26 @@ appRoot.innerHTML = `
         </div>
       </section>
 
-      <section class="view-panel" data-view-panel="log">
+      <section class="view-panel" data-view-panel="system">
+        <section class="system-panel" aria-labelledby="system-title">
+          <div class="section-header">
+            <div>
+              <h2 id="system-title">System</h2>
+              <p>Manage the app appearance and saved deck/module config.</p>
+            </div>
+          </div>
+          <div class="system-actions">
+            <label class="switch">
+              <input id="themeToggle" type="checkbox" />
+              <span id="themeLabel">Light Mode</span>
+            </label>
+            <div class="config-file-actions">
+              <button class="secondary" id="importConfigButton" type="button">Import</button>
+              <button class="primary" id="exportConfigButton" type="button">Export</button>
+              <input id="importConfigInput" type="file" accept="application/json,.json" hidden />
+            </div>
+          </div>
+        </section>
         <section class="log-panel" aria-labelledby="log-title">
           <div class="log-header">
             <h2 id="log-title">Connection Log</h2>
@@ -156,6 +173,8 @@ const customModuleForm = query<HTMLFormElement>("#customModuleForm");
 const customModuleUrlInput = query<HTMLInputElement>("#customModuleUrlInput");
 const moduleGrid = query<HTMLDivElement>("#moduleGrid");
 const deckEditToggle = query<HTMLInputElement>("#deckEditToggle");
+const themeToggle = query<HTMLInputElement>("#themeToggle");
+const themeLabel = query<HTMLSpanElement>("#themeLabel");
 const importConfigButton = query<HTMLButtonElement>("#importConfigButton");
 const exportConfigButton = query<HTMLButtonElement>("#exportConfigButton");
 const importConfigInput = query<HTMLInputElement>("#importConfigInput");
@@ -169,6 +188,7 @@ const tabButtons = [...appRoot.querySelectorAll<HTMLButtonElement>(".tab-button"
 const viewPanels = [...appRoot.querySelectorAll<HTMLElement>("[data-view-panel]")];
 
 installConsoleCapture();
+applyTheme();
 
 await restoreModules();
 addLog("system", "System", "Ready. Toggle any module on to connect it.");
@@ -178,7 +198,7 @@ for (const button of tabButtons) {
   button.addEventListener("click", () => {
     const view = button.dataset.view;
 
-    if (view === "modules" || view === "deck" || view === "log") {
+    if (view === "modules" || view === "deck" || view === "system") {
       activeView = view;
       render();
     }
@@ -269,6 +289,13 @@ moduleGrid.addEventListener("change", (event) => {
 
 deckEditToggle.addEventListener("change", () => {
   isDeckEditMode = deckEditToggle.checked;
+  render();
+});
+
+themeToggle.addEventListener("change", () => {
+  appTheme = themeToggle.checked ? "dark" : "light";
+  localStorage.setItem(THEME_STORAGE_KEY, appTheme);
+  applyTheme();
   render();
 });
 
@@ -560,11 +587,21 @@ function addLog(
 }
 
 function render(): void {
+  renderTheme();
   renderStatus();
   renderViews();
   renderModules();
   renderDeck();
   renderLogs();
+}
+
+function applyTheme(): void {
+  document.documentElement.dataset.theme = appTheme;
+}
+
+function renderTheme(): void {
+  themeToggle.checked = appTheme === "dark";
+  themeLabel.textContent = appTheme === "dark" ? "Dark Mode" : "Light Mode";
 }
 
 function renderViews(): void {
@@ -1137,6 +1174,10 @@ function saveRuntimeConfig(runtime: ModuleRuntime): void {
 
 function readStoredEnabled(module: WebDeckModule): boolean {
   return localStorage.getItem(`${ENABLED_STORAGE_PREFIX}${module.id}`) === "true";
+}
+
+function readStoredTheme(): AppTheme {
+  return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
 }
 
 function readStoredCustomModuleUrls(): string[] {
