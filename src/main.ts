@@ -29,6 +29,8 @@ type ModuleRuntime = {
 
 type DeckButtonConfig = {
   label: string;
+  imageDataUrl?: string;
+  imageUrl?: string;
   moduleId: string;
   eventId: string;
   params: Record<string, string>;
@@ -361,6 +363,14 @@ deckConfigPanel.addEventListener("input", (event) => {
     config.label = input.value;
   }
 
+  if (input.dataset.deckConfig === "image-url") {
+    config.imageUrl = input.value.trim();
+
+    if (config.imageUrl) {
+      delete config.imageDataUrl;
+    }
+  }
+
   if (input.dataset.paramKey) {
     config.params[input.dataset.paramKey] = input.value;
   }
@@ -372,6 +382,17 @@ deckConfigPanel.addEventListener("input", (event) => {
 
 deckConfigPanel.addEventListener("change", (event) => {
   const target = event.target;
+
+  if (target instanceof HTMLInputElement && target.dataset.deckConfig === "image-file") {
+    const file = target.files?.[0];
+    target.value = "";
+
+    if (file) {
+      void updateDeckButtonImage(file);
+    }
+
+    return;
+  }
 
   if (!(target instanceof HTMLSelectElement)) {
     return;
@@ -399,7 +420,16 @@ deckConfigPanel.addEventListener("change", (event) => {
 deckConfigPanel.addEventListener("click", (event) => {
   const button = event.target;
 
-  if (!(button instanceof HTMLButtonElement) || button.dataset.action !== "test-event") {
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  if (button.dataset.action === "remove-image") {
+    removeDeckButtonImage();
+    return;
+  }
+
+  if (button.dataset.action !== "test-event") {
     return;
   }
 
@@ -749,13 +779,15 @@ function renderDeckButtons(): void {
   deckGrid.innerHTML = Array.from({ length: 64 }, (_, index) => {
     const config = deckButtons[index];
     const label = deckButtonLabel(index, config);
+    const imageSource = deckButtonImageSource(config);
 
     return `
       <button
-        class="deck-button ${isDeckEditMode && selectedDeckButton === index ? "selected" : ""}"
+        class="deck-button ${imageSource ? "has-image" : ""} ${isDeckEditMode && selectedDeckButton === index ? "selected" : ""}"
         data-deck-index="${index}"
         type="button"
       >
+        ${imageSource ? `<img src="${escapeHtml(imageSource)}" alt="" />` : ""}
         <span>${escapeHtml(label)}</span>
       </button>
     `;
@@ -827,6 +859,34 @@ function renderDeckConfigPanel(): string {
         type="text"
         value="${escapeHtml(config.label)}"
         placeholder="Button ${selectedDeckButton + 1}"
+      />
+    </label>
+    <div class="image-field">
+      <span>Button Image</span>
+      <div class="image-actions">
+        <label class="image-upload">
+          <input data-deck-config="image-file" type="file" accept="image/*" />
+          <span>${config.imageDataUrl ? "Replace Local Image" : "Choose Local Image"}</span>
+        </label>
+        <button
+          class="secondary"
+          data-action="remove-image"
+          type="button"
+          ${deckButtonImageSource(config) ? "" : "disabled"}
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+    <label class="field">
+      <span>Image URL</span>
+      <input
+        data-deck-config="image-url"
+        type="url"
+        inputmode="url"
+        spellcheck="false"
+        value="${escapeHtml(config.imageUrl ?? "")}"
+        placeholder="https://example.com/button.png"
       />
     </label>
     <label class="field">
@@ -918,6 +978,10 @@ function deckButtonLabel(index: number, config: DeckButtonConfig | undefined): s
   return event?.name ?? String(index + 1);
 }
 
+function deckButtonImageSource(config: DeckButtonConfig | undefined): string {
+  return config?.imageDataUrl ?? config?.imageUrl ?? "";
+}
+
 function createEmptyDeckButtonConfig(): DeckButtonConfig {
   return {
     label: "",
@@ -925,6 +989,85 @@ function createEmptyDeckButtonConfig(): DeckButtonConfig {
     eventId: "",
     params: {},
   };
+}
+
+async function updateDeckButtonImage(file: File): Promise<void> {
+  if (!file.type.startsWith("image/")) {
+    addLog("error", "Deck", "Choose an image file for the button.");
+    renderLogs();
+    return;
+  }
+
+  try {
+    const config = deckButtons[selectedDeckButton] ?? createEmptyDeckButtonConfig();
+    config.imageDataUrl = await resizeImageFile(file, 512);
+    delete config.imageUrl;
+    deckButtons[selectedDeckButton] = config;
+    saveDeckButtons();
+    renderDeck();
+  } catch (error) {
+    addLog("error", "Deck", `Could not load image: ${errorMessage(error)}`);
+    renderLogs();
+  }
+}
+
+function removeDeckButtonImage(): void {
+  const config = deckButtons[selectedDeckButton];
+
+  if (!config) {
+    return;
+  }
+
+  delete config.imageDataUrl;
+  delete config.imageUrl;
+  saveDeckButtons();
+  renderDeck();
+}
+
+async function resizeImageFile(file: File, maxSize: number): Promise<string> {
+  const image = await loadImage(file);
+  const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Image resizing is not supported in this browser.");
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  return canvas.toDataURL("image/webp", 0.86);
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.addEventListener(
+      "load",
+      () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      },
+      { once: true },
+    );
+
+    image.addEventListener(
+      "error",
+      () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("The selected file could not be decoded."));
+      },
+      { once: true },
+    );
+
+    image.src = url;
+  });
 }
 
 function createExportConfig(): WebDeckExportConfig {
@@ -1137,6 +1280,8 @@ function normalizeDeckButtonConfig(value: unknown): DeckButtonConfig | undefined
 
   return {
     label: value.label ?? "",
+    imageDataUrl: typeof value.imageDataUrl === "string" ? value.imageDataUrl : undefined,
+    imageUrl: typeof value.imageUrl === "string" ? value.imageUrl : undefined,
     moduleId: value.moduleId,
     eventId: value.eventId,
     params: value.params,

@@ -450,6 +450,10 @@ h3 {
 }
 
 .deck-button {
+  position: relative;
+  display: grid;
+  place-items: end stretch;
+  overflow: hidden;
   aspect-ratio: 1;
   min-height: 0;
   padding: 0;
@@ -460,13 +464,33 @@ h3 {
   font-weight: 760;
 }
 
+.deck-button img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .deck-button span {
+  position: relative;
+  z-index: 1;
   display: block;
   max-width: 100%;
   overflow: hidden;
-  padding: 0 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0 6px 8px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+}
+
+.deck-button.has-image span {
+  min-width: 0;
+  padding: 6px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72));
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
 }
 
 .deck-button.selected {
@@ -507,6 +531,57 @@ h3 {
 .deck-config-header p {
   margin: 4px 0 0;
   color: #5a6a60;
+}
+
+.image-field {
+  display: grid;
+  gap: 8px;
+}
+
+.image-field > span {
+  color: #3b4a40;
+  font-size: 0.86rem;
+  font-weight: 760;
+}
+
+.image-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.image-upload {
+  display: grid;
+  min-width: 0;
+}
+
+.image-upload input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.image-upload span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #31443a;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 760;
+}
+
+:root[data-theme="dark"] .image-field > span {
+  color: #c5d1c9;
+}
+
+:root[data-theme="dark"] .image-upload span {
+  background: #3c4f44;
 }
 
 .custom-form {
@@ -804,9 +879,14 @@ pre {
   .deck-toolbar,
   .deck-toolbar-controls,
   .system-actions,
-  .config-file-actions {
+  .config-file-actions,
+  .image-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .image-actions {
+    grid-template-columns: 1fr;
   }
 
   .log-header,
