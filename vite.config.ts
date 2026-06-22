@@ -3,6 +3,29 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   base: "./",
+  plugins: [
+    {
+      name: "webdeck-html-entry",
+      transformIndexHtml: {
+        order: "pre",
+        handler(html) {
+          return html
+            .replace(
+              /    <script type="module" crossorigin src="\.\/assets\/app\.js"><\/script>\r?\n/,
+              "",
+            )
+            .replace(
+              /    <link rel="stylesheet" crossorigin href="\.\/assets\/app\.css" \/>\r?\n/,
+              "",
+            )
+            .replace(
+              "  </body>",
+              '    <script type="module" src="/src/main.ts"></script>\n  </body>',
+            );
+        },
+      },
+    },
+  ],
   build: {
     rollupOptions: {
       preserveEntrySignatures: "exports-only",
