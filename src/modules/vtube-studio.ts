@@ -148,7 +148,6 @@ function createVTubeStudioController(
         }
 
         authenticationToken = token;
-        host.setConfigValue?.(AUTH_TOKEN_CONFIG_KEY, token);
         requestAuthentication(false);
       },
     );
@@ -171,6 +170,8 @@ function createVTubeStudioController(
       },
       (message) => {
         if (message.data?.authenticated) {
+          authenticationToken = token;
+          host.setConfigValue?.(AUTH_TOKEN_CONFIG_KEY, token);
           isAuthenticated = true;
           setStatus("connected");
           host.log("system", "Authenticated.");

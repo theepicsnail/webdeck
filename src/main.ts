@@ -1346,7 +1346,7 @@ function readStoredEnabled(module: WebDeckModule): boolean {
 }
 
 function readStoredTheme(): AppTheme {
-  return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
 }
 
 function readStoredCustomModuleUrls(): string[] {
