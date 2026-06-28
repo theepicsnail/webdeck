@@ -151,10 +151,28 @@ appRoot.innerHTML = `
               <input id="themeToggle" type="checkbox" />
               <span id="themeLabel">Light Mode</span>
             </label>
-            <div class="config-file-actions">
-              <button class="secondary" id="importConfigButton" type="button">Import</button>
-              <button class="primary" id="exportConfigButton" type="button">Export</button>
-              <input id="importConfigInput" type="file" accept="application/json,.json" hidden />
+            <div class="config-transfer-actions">
+              <form class="config-url-form" id="importConfigUrlForm">
+                <label class="field">
+                  <span>Import from URL</span>
+                  <input
+                    id="importConfigUrlInput"
+                    type="url"
+                    inputmode="url"
+                    spellcheck="false"
+                    autocomplete="off"
+                    placeholder="https://example.com/webdeck-config.json"
+                    value="http://192.168.1.101:4173/pyonta.json"
+                    required
+                  />
+                </label>
+                <button class="secondary" id="importConfigUrlButton" type="submit">Import URL</button>
+              </form>
+              <div class="config-file-actions">
+                <button class="secondary" id="importConfigButton" type="button">Import File</button>
+                <button class="primary" id="exportConfigButton" type="button">Export</button>
+                <input id="importConfigInput" type="file" accept="application/json,.json" hidden />
+              </div>
             </div>
           </div>
         </section>
@@ -183,6 +201,9 @@ const deckEditToggle = query<HTMLInputElement>("#deckEditToggle");
 const deckFullscreenButton = query<HTMLButtonElement>("#deckFullscreenButton");
 const themeToggle = query<HTMLInputElement>("#themeToggle");
 const themeLabel = query<HTMLSpanElement>("#themeLabel");
+const importConfigUrlForm = query<HTMLFormElement>("#importConfigUrlForm");
+const importConfigUrlInput = query<HTMLInputElement>("#importConfigUrlInput");
+const importConfigUrlButton = query<HTMLButtonElement>("#importConfigUrlButton");
 const importConfigButton = query<HTMLButtonElement>("#importConfigButton");
 const exportConfigButton = query<HTMLButtonElement>("#exportConfigButton");
 const importConfigInput = query<HTMLInputElement>("#importConfigInput");
@@ -327,6 +348,25 @@ exportConfigButton.addEventListener("click", () => {
 
 importConfigButton.addEventListener("click", () => {
   importConfigInput.click();
+});
+
+importConfigUrlForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const url = importConfigUrlInput.value.trim();
+
+  if (!url) {
+    return;
+  }
+
+  importConfigUrlButton.disabled = true;
+  importConfigUrlButton.textContent = "Importing...";
+
+  try {
+    await importDeckConfigFromUrl(url);
+  } finally {
+    importConfigUrlButton.disabled = false;
+    importConfigUrlButton.textContent = "Import URL";
+  }
 });
 
 importConfigInput.addEventListener("change", async () => {
@@ -1112,11 +1152,37 @@ function exportDeckConfig(): void {
 
 async function importDeckConfig(file: File): Promise<void> {
   try {
-    const imported = parseExportConfig(JSON.parse(await file.text()));
-    await applyExportConfig(imported);
-    addLog("system", "Deck", "Imported deck and module config.");
+    await importDeckConfigJson(await file.text(), "file");
   } catch (error) {
-    addLog("error", "Deck", `Could not import config: ${errorMessage(error)}`);
+    addLog("error", "Deck", `Could not read config file: ${errorMessage(error)}`);
+    render();
+  }
+}
+
+async function importDeckConfigFromUrl(url: string): Promise<void> {
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed with HTTP ${response.status}.`);
+    }
+
+    await importDeckConfigJson(await response.text(), "URL");
+  } catch (error) {
+    addLog("error", "Deck", `Could not import config from URL: ${errorMessage(error)}`);
+    render();
+  }
+}
+
+async function importDeckConfigJson(json: string, source: "file" | "URL"): Promise<void> {
+  try {
+    const imported = parseExportConfig(JSON.parse(json));
+    await applyExportConfig(imported);
+    addLog("system", "Deck", `Imported deck and module config from ${source}.`);
+  } catch (error) {
+    addLog("error", "Deck", `Could not import config from ${source}: ${errorMessage(error)}`);
   }
 
   render();
@@ -1163,7 +1229,7 @@ async function applyExportConfig(imported: WebDeckExportConfig): Promise<void> {
 
 function parseExportConfig(value: unknown): WebDeckExportConfig {
   if (!value || typeof value !== "object") {
-    throw new Error("Import file must contain a JSON object.");
+    throw new Error("Imported config must contain a JSON object.");
   }
 
   const config = value as Partial<WebDeckExportConfig>;
