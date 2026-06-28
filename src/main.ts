@@ -125,7 +125,7 @@ appRoot.innerHTML = `
       <section class="view-panel deck-panel" data-view-panel="deck" id="deckPanel">
         <div class="deck-toolbar">
           <div class="deck-toolbar-controls">
-            <label class="switch">
+            <label class="switch deck-edit-control">
               <input id="deckEditToggle" type="checkbox" />
               <span>Edit Mode</span>
             </label>
@@ -197,10 +197,6 @@ const viewPanels = [...appRoot.querySelectorAll<HTMLElement>("[data-view-panel]"
 
 installConsoleCapture();
 applyTheme();
-
-await restoreModules();
-addLog("system", "System", "Ready. Toggle any module on to connect it.");
-render();
 
 for (const button of tabButtons) {
   button.addEventListener("click", () => {
@@ -300,9 +296,22 @@ deckEditToggle.addEventListener("change", () => {
   render();
 });
 
-deckFullscreenButton.addEventListener("click", () => {
-  isDeckFullscreen = !isDeckFullscreen;
-  render();
+deckFullscreenButton.addEventListener("click", async () => {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await deckPanel.requestFullscreen();
+    }
+  } catch (error) {
+    addLog("error", "Deck", `Could not change fullscreen mode: ${errorMessage(error)}`);
+    renderLogs();
+  }
+});
+
+document.addEventListener("fullscreenchange", () => {
+  isDeckFullscreen = document.fullscreenElement === deckPanel;
+  renderDeck();
 });
 
 themeToggle.addEventListener("change", () => {
@@ -442,20 +451,20 @@ clearButton.addEventListener("click", () => {
   render();
 });
 
-window.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape" || !isDeckFullscreen) {
-    return;
-  }
-
-  isDeckFullscreen = false;
-  render();
-});
-
 window.addEventListener("beforeunload", () => {
   for (const runtime of runtimes) {
     void runtime.controller.dispose?.();
   }
 });
+
+render();
+void initializeApp();
+
+async function initializeApp(): Promise<void> {
+  await restoreModules();
+  addLog("system", "System", "Ready. Toggle any module on to connect it.");
+  render();
+}
 
 function query<T extends Element>(selector: string): T {
   const element = appRoot.querySelector<T>(selector);

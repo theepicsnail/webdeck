@@ -375,6 +375,10 @@ h3 {
   padding: 16px;
 }
 
+.deck-panel[data-fullscreen="true"] .deck-edit-control {
+  display: none;
+}
+
 .deck-toolbar {
   display: flex;
   align-items: center;
