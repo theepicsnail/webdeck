@@ -393,6 +393,36 @@ h3 {
   gap: 12px;
 }
 
+.deck-size-controls,
+.button-span-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+  gap: 8px;
+}
+
+.deck-size-controls label {
+  display: grid;
+  grid-template-columns: auto 68px;
+  align-items: center;
+  gap: 7px;
+  color: #3b4a40;
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+:root[data-theme="dark"] .deck-size-controls label,
+:root[data-theme="dark"] .field-help {
+  color: #c5d1c9;
+}
+
+.deck-size-controls input {
+  min-height: 38px;
+}
+
+.deck-size-controls[hidden] {
+  display: none;
+}
+
 .system-panel {
   display: grid;
   gap: 14px;
@@ -445,11 +475,11 @@ h3 {
 
 .deck-grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(44px, 1fr));
-  grid-template-rows: repeat(8, minmax(44px, 1fr));
+  grid-template-columns: repeat(var(--deck-columns, 8), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--deck-rows, 8), minmax(0, 1fr));
   gap: 10px;
   width: min(100%, calc(100vh - 18px - 18px - 46px - 32px - 48px));
-  aspect-ratio: 1;
+  aspect-ratio: var(--deck-aspect-ratio, 1);
   justify-self: center;
 }
 
@@ -473,7 +503,6 @@ h3 {
   display: grid;
   place-items: end stretch;
   overflow: hidden;
-  aspect-ratio: 1;
   min-height: 0;
   padding: 0;
   background: #fffdf7;
@@ -481,6 +510,12 @@ h3 {
   border: 1px solid rgba(23, 33, 26, 0.14);
   box-shadow: 0 8px 18px rgba(37, 45, 39, 0.06);
   font-weight: 760;
+}
+
+.field-help {
+  margin: -6px 0 0;
+  color: #5a6a60;
+  font-size: 0.82rem;
 }
 
 .deck-button img {
@@ -903,6 +938,10 @@ pre {
   .image-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .deck-size-controls {
+    width: 100%;
   }
 
   .config-transfer-actions {

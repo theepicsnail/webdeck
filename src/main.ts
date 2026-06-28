@@ -31,6 +31,8 @@ type DeckButtonConfig = {
   label: string;
   imageDataUrl?: string;
   imageUrl?: string;
+  columnSpan: number;
+  rowSpan: number;
   moduleId: string;
   eventId: string;
   params: Record<string, string>;
@@ -45,14 +47,23 @@ type WebDeckExportConfig = {
     config: Record<string, string>;
   }>;
   customModuleUrls: string[];
+  deckLayout: DeckLayoutConfig;
   deckButtons: Array<DeckButtonConfig | undefined>;
+};
+
+type DeckLayoutConfig = {
+  rows: number;
+  columns: number;
 };
 
 const CONFIG_STORAGE_PREFIX = "webdeck.config.";
 const ENABLED_STORAGE_PREFIX = "webdeck.enabled.";
 const CUSTOM_MODULES_STORAGE_KEY = "webdeck.customModules";
 const DECK_STORAGE_KEY = "webdeck.deckButtons";
+const DECK_LAYOUT_STORAGE_KEY = "webdeck.deckLayout";
 const THEME_STORAGE_KEY = "webdeck.theme";
+const DEFAULT_DECK_SIZE = 8;
+const MAX_DECK_SIZE = 16;
 const BUILT_IN_MODULE_URLS = import.meta.env.DEV
   ? ["/src/modules/obs.ts", "/src/modules/warudo.ts", "/src/modules/vtube-studio.ts"]
   : ["./obs.js", "./warudo.js", "./vtube-studio.js"];
@@ -66,7 +77,8 @@ let appTheme: AppTheme = readStoredTheme();
 let isDeckEditMode = false;
 let isDeckFullscreen = false;
 let selectedDeckButton = 0;
-let deckButtons = readStoredDeckButtons();
+let deckLayoutConfig = readStoredDeckLayout();
+let deckButtons = readStoredDeckButtons(deckLayoutConfig.rows * deckLayoutConfig.columns);
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -129,6 +141,16 @@ appRoot.innerHTML = `
               <input id="deckEditToggle" type="checkbox" />
               <span>Edit Mode</span>
             </label>
+            <div class="deck-size-controls" id="deckSizeControls">
+              <label>
+                <span>Rows</span>
+                <input id="deckRowsInput" type="number" min="1" max="${MAX_DECK_SIZE}" />
+              </label>
+              <label>
+                <span>Columns</span>
+                <input id="deckColumnsInput" type="number" min="1" max="${MAX_DECK_SIZE}" />
+              </label>
+            </div>
             <button class="secondary" id="deckFullscreenButton" type="button">Fullscreen</button>
           </div>
         </div>
@@ -198,6 +220,9 @@ const customModuleUrlInput = query<HTMLInputElement>("#customModuleUrlInput");
 const moduleGrid = query<HTMLDivElement>("#moduleGrid");
 const deckPanel = query<HTMLElement>("#deckPanel");
 const deckEditToggle = query<HTMLInputElement>("#deckEditToggle");
+const deckSizeControls = query<HTMLDivElement>("#deckSizeControls");
+const deckRowsInput = query<HTMLInputElement>("#deckRowsInput");
+const deckColumnsInput = query<HTMLInputElement>("#deckColumnsInput");
 const deckFullscreenButton = query<HTMLButtonElement>("#deckFullscreenButton");
 const themeToggle = query<HTMLInputElement>("#themeToggle");
 const themeLabel = query<HTMLSpanElement>("#themeLabel");
@@ -315,6 +340,17 @@ moduleGrid.addEventListener("change", (event) => {
 deckEditToggle.addEventListener("change", () => {
   isDeckEditMode = deckEditToggle.checked;
   render();
+});
+
+deckSizeControls.addEventListener("change", () => {
+  const rows = clampDeckDimension(Number(deckRowsInput.value));
+  const columns = clampDeckDimension(Number(deckColumnsInput.value));
+
+  deckLayoutConfig = { rows, columns };
+  selectedDeckButton = Math.min(selectedDeckButton, rows * columns - 1);
+  ensureDeckButtonCapacity(rows * columns);
+  saveDeckLayout();
+  renderDeck();
 });
 
 deckFullscreenButton.addEventListener("click", async () => {
@@ -440,6 +476,31 @@ deckConfigPanel.addEventListener("change", (event) => {
       void updateDeckButtonImage(file);
     }
 
+    return;
+  }
+
+  if (target instanceof HTMLInputElement &&
+      (target.dataset.deckConfig === "column-span" || target.dataset.deckConfig === "row-span")) {
+    const config = deckButtons[selectedDeckButton] ?? createEmptyDeckButtonConfig();
+    const nextColumnSpan = target.dataset.deckConfig === "column-span"
+      ? clampSpan(Number(target.value), deckLayoutConfig.columns)
+      : config.columnSpan;
+    const nextRowSpan = target.dataset.deckConfig === "row-span"
+      ? clampSpan(Number(target.value), deckLayoutConfig.rows)
+      : config.rowSpan;
+
+    if (!canButtonOccupySpan(selectedDeckButton, nextColumnSpan, nextRowSpan)) {
+      addLog("error", "Deck", "That span would cover another configured button.");
+      renderLogs();
+      renderDeck();
+      return;
+    }
+
+    config.columnSpan = nextColumnSpan;
+    config.rowSpan = nextRowSpan;
+    deckButtons[selectedDeckButton] = config;
+    saveDeckButtons();
+    renderDeck();
     return;
   }
 
@@ -820,27 +881,47 @@ function renderDeck(): void {
   deckFullscreenButton.textContent = isDeckFullscreen ? "Exit Fullscreen" : "Fullscreen";
   deckFullscreenButton.setAttribute("aria-pressed", String(isDeckFullscreen));
   deckConfigPanel.hidden = !isDeckEditMode;
+  deckSizeControls.hidden = !isDeckEditMode;
+  deckRowsInput.value = String(deckLayoutConfig.rows);
+  deckColumnsInput.value = String(deckLayoutConfig.columns);
+  deckGrid.style.setProperty("--deck-columns", String(deckLayoutConfig.columns));
+  deckGrid.style.setProperty("--deck-rows", String(deckLayoutConfig.rows));
+  deckGrid.style.setProperty("--deck-aspect-ratio", `${deckLayoutConfig.columns} / ${deckLayoutConfig.rows}`);
   renderDeckButtons();
   deckConfigPanel.innerHTML = isDeckEditMode ? renderDeckConfigPanel() : "";
 }
 
 function renderDeckButtons(): void {
-  deckGrid.innerHTML = Array.from({ length: 64 }, (_, index) => {
+  const occupied = new Set<number>();
+  const buttonMarkup: string[] = [];
+  const buttonCount = deckLayoutConfig.rows * deckLayoutConfig.columns;
+
+  for (let index = 0; index < buttonCount; index += 1) {
+    if (occupied.has(index)) {
+      continue;
+    }
+
     const config = deckButtons[index];
     const label = deckButtonLabel(index, config);
     const imageSource = deckButtonImageSource(config);
+    const { columnSpan, rowSpan } = effectiveButtonSpan(index, config, occupied);
 
-    return `
+    markOccupiedCells(index, columnSpan, rowSpan, occupied);
+
+    buttonMarkup.push(`
       <button
         class="deck-button ${imageSource ? "has-image" : ""} ${isDeckEditMode && selectedDeckButton === index ? "selected" : ""}"
         data-deck-index="${index}"
+        style="grid-column: span ${columnSpan}; grid-row: span ${rowSpan}"
         type="button"
       >
         ${imageSource ? `<img src="${escapeHtml(imageSource)}" alt="" />` : ""}
         <span>${escapeHtml(label)}</span>
       </button>
-    `;
-  }).join("");
+    `);
+  }
+
+  deckGrid.innerHTML = buttonMarkup.join("");
 }
 
 function renderLogs(): void {
@@ -910,6 +991,29 @@ function renderDeckConfigPanel(): string {
         placeholder="Button ${selectedDeckButton + 1}"
       />
     </label>
+    <div class="button-span-fields">
+      <label class="field">
+        <span>Column Span</span>
+        <input
+          data-deck-config="column-span"
+          type="number"
+          min="1"
+          max="${deckLayoutConfig.columns}"
+          value="${config.columnSpan}"
+        />
+      </label>
+      <label class="field">
+        <span>Row Span</span>
+        <input
+          data-deck-config="row-span"
+          type="number"
+          min="1"
+          max="${deckLayoutConfig.rows}"
+          value="${config.rowSpan}"
+        />
+      </label>
+    </div>
+    <p class="field-help">Larger buttons can span empty cells, but will not replace configured buttons.</p>
     <div class="image-field">
       <span>Button Image</span>
       <div class="image-actions">
@@ -1034,6 +1138,8 @@ function deckButtonImageSource(config: DeckButtonConfig | undefined): string {
 function createEmptyDeckButtonConfig(): DeckButtonConfig {
   return {
     label: "",
+    columnSpan: 1,
+    rowSpan: 1,
     moduleId: "",
     eventId: "",
     params: {},
@@ -1129,6 +1235,7 @@ function createExportConfig(): WebDeckExportConfig {
       config: runtime.config,
     })),
     customModuleUrls: readStoredCustomModuleUrls(),
+    deckLayout: deckLayoutConfig,
     deckButtons,
   };
 }
@@ -1190,7 +1297,9 @@ async function importDeckConfigJson(json: string, source: "file" | "URL"): Promi
 
 async function applyExportConfig(imported: WebDeckExportConfig): Promise<void> {
   localStorage.setItem(CUSTOM_MODULES_STORAGE_KEY, JSON.stringify(imported.customModuleUrls));
-  deckButtons = Array.from({ length: 64 }, (_, index) =>
+  deckLayoutConfig = imported.deckLayout;
+  saveDeckLayout();
+  deckButtons = Array.from({ length: Math.max(imported.deckButtons.length, deckLayoutConfig.rows * deckLayoutConfig.columns) }, (_, index) =>
     normalizeDeckButtonConfig(imported.deckButtons[index]),
   );
   saveDeckButtons();
@@ -1250,6 +1359,8 @@ function parseExportConfig(value: unknown): WebDeckExportConfig {
     throw new Error("Import file is missing deck buttons.");
   }
 
+  const deckLayout = normalizeDeckLayout(config.deckLayout);
+
   return {
     schemaVersion: 1,
     exportedAt: typeof config.exportedAt === "string" ? config.exportedAt : "",
@@ -1257,8 +1368,10 @@ function parseExportConfig(value: unknown): WebDeckExportConfig {
     customModuleUrls: config.customModuleUrls.filter(
       (url): url is string => typeof url === "string",
     ),
-    deckButtons: Array.from({ length: 64 }, (_, index) =>
-      normalizeDeckButtonConfig(config.deckButtons?.[index]),
+    deckLayout,
+    deckButtons: Array.from(
+      { length: Math.max(config.deckButtons.length, deckLayout.rows * deckLayout.columns) },
+      (_, index) => normalizeDeckButtonConfig(config.deckButtons?.[index]),
     ),
   };
 }
@@ -1309,26 +1422,26 @@ function defaultEventParams(event: WebDeckModuleEvent | undefined): Record<strin
   );
 }
 
-function readStoredDeckButtons(): Array<DeckButtonConfig | undefined> {
+function readStoredDeckButtons(minimumLength: number): Array<DeckButtonConfig | undefined> {
   const stored = localStorage.getItem(DECK_STORAGE_KEY);
 
   if (!stored) {
-    return Array.from({ length: 64 });
+    return Array.from({ length: minimumLength });
   }
 
   try {
     const parsed = JSON.parse(stored) as unknown;
 
     if (Array.isArray(parsed)) {
-      return Array.from({ length: 64 }, (_, index) =>
+      return Array.from({ length: Math.max(parsed.length, minimumLength) }, (_, index) =>
         normalizeDeckButtonConfig(parsed[index]),
       );
     }
   } catch {
-    return Array.from({ length: 64 });
+    return Array.from({ length: minimumLength });
   }
 
-  return Array.from({ length: 64 });
+  return Array.from({ length: minimumLength });
 }
 
 function isDeckButtonConfig(value: unknown): value is DeckButtonConfig {
@@ -1357,6 +1470,8 @@ function normalizeDeckButtonConfig(value: unknown): DeckButtonConfig | undefined
     label: value.label ?? "",
     imageDataUrl: typeof value.imageDataUrl === "string" ? value.imageDataUrl : undefined,
     imageUrl: typeof value.imageUrl === "string" ? value.imageUrl : undefined,
+    columnSpan: clampSpan(value.columnSpan, MAX_DECK_SIZE),
+    rowSpan: clampSpan(value.rowSpan, MAX_DECK_SIZE),
     moduleId: value.moduleId,
     eventId: value.eventId,
     params: value.params,
@@ -1365,6 +1480,119 @@ function normalizeDeckButtonConfig(value: unknown): DeckButtonConfig | undefined
 
 function saveDeckButtons(): void {
   localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(deckButtons));
+}
+
+function readStoredDeckLayout(): DeckLayoutConfig {
+  try {
+    return normalizeDeckLayout(JSON.parse(localStorage.getItem(DECK_LAYOUT_STORAGE_KEY) ?? "null"));
+  } catch {
+    return { rows: DEFAULT_DECK_SIZE, columns: DEFAULT_DECK_SIZE };
+  }
+}
+
+function normalizeDeckLayout(value: unknown): DeckLayoutConfig {
+  if (!value || typeof value !== "object") {
+    return { rows: DEFAULT_DECK_SIZE, columns: DEFAULT_DECK_SIZE };
+  }
+
+  const layout = value as Partial<DeckLayoutConfig>;
+  return {
+    rows: clampDeckDimension(Number(layout.rows)),
+    columns: clampDeckDimension(Number(layout.columns)),
+  };
+}
+
+function clampDeckDimension(value: number): number {
+  return Number.isFinite(value)
+    ? Math.max(1, Math.min(MAX_DECK_SIZE, Math.round(value)))
+    : DEFAULT_DECK_SIZE;
+}
+
+function clampSpan(value: unknown, maximum: number): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(1, Math.min(maximum, Math.round(number))) : 1;
+}
+
+function saveDeckLayout(): void {
+  localStorage.setItem(DECK_LAYOUT_STORAGE_KEY, JSON.stringify(deckLayoutConfig));
+}
+
+function ensureDeckButtonCapacity(length: number): void {
+  while (deckButtons.length < length) {
+    deckButtons.push(undefined);
+  }
+  saveDeckButtons();
+}
+
+function canButtonOccupySpan(index: number, columnSpan: number, rowSpan: number): boolean {
+  const startColumn = index % deckLayoutConfig.columns;
+  const startRow = Math.floor(index / deckLayoutConfig.columns);
+
+  if (
+    startColumn + columnSpan > deckLayoutConfig.columns ||
+    startRow + rowSpan > deckLayoutConfig.rows
+  ) {
+    return false;
+  }
+
+  for (let row = startRow; row < startRow + rowSpan; row += 1) {
+    for (let column = startColumn; column < startColumn + columnSpan; column += 1) {
+      const coveredIndex = row * deckLayoutConfig.columns + column;
+      if (coveredIndex !== index && deckButtons[coveredIndex]) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function effectiveButtonSpan(
+  index: number,
+  config: DeckButtonConfig | undefined,
+  occupied: Set<number>,
+): { columnSpan: number; rowSpan: number } {
+  const requestedColumns = clampSpan(config?.columnSpan, deckLayoutConfig.columns);
+  const requestedRows = clampSpan(config?.rowSpan, deckLayoutConfig.rows);
+
+  for (let area = requestedColumns * requestedRows; area >= 1; area -= 1) {
+    for (let rowSpan = requestedRows; rowSpan >= 1; rowSpan -= 1) {
+      for (let columnSpan = requestedColumns; columnSpan >= 1; columnSpan -= 1) {
+        if (columnSpan * rowSpan !== area || !canButtonOccupySpan(index, columnSpan, rowSpan)) {
+          continue;
+        }
+
+        const cells = coveredCellIndexes(index, columnSpan, rowSpan);
+        if (cells.every((cellIndex) => cellIndex === index || !occupied.has(cellIndex))) {
+          return { columnSpan, rowSpan };
+        }
+      }
+    }
+  }
+
+  return { columnSpan: 1, rowSpan: 1 };
+}
+
+function coveredCellIndexes(index: number, columnSpan: number, rowSpan: number): number[] {
+  const startColumn = index % deckLayoutConfig.columns;
+  const startRow = Math.floor(index / deckLayoutConfig.columns);
+  const indexes: number[] = [];
+
+  for (let row = startRow; row < startRow + rowSpan; row += 1) {
+    for (let column = startColumn; column < startColumn + columnSpan; column += 1) {
+      indexes.push(row * deckLayoutConfig.columns + column);
+    }
+  }
+
+  return indexes;
+}
+
+function markOccupiedCells(index: number, columnSpan: number, rowSpan: number, occupied: Set<number>): void {
+  for (const cellIndex of coveredCellIndexes(index, columnSpan, rowSpan)) {
+    if (cellIndex !== index) {
+      occupied.add(cellIndex);
+    }
+  }
 }
 
 function formatConsoleValue(value: unknown): string {
