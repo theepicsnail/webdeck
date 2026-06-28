@@ -412,6 +412,21 @@ h3 {
   gap: 8px;
 }
 
+.config-transfer-actions {
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+  width: min(100%, 660px);
+}
+
+.config-url-form {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  width: 100%;
+}
+
 .deck-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -883,10 +898,20 @@ pre {
   .deck-toolbar,
   .deck-toolbar-controls,
   .system-actions,
+  .config-transfer-actions,
   .config-file-actions,
   .image-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .config-transfer-actions {
+    display: grid;
+    justify-items: stretch;
+  }
+
+  .config-url-form {
+    grid-template-columns: 1fr;
   }
 
   .image-actions {
