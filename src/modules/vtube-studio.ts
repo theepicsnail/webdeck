@@ -63,7 +63,7 @@ export const vtubeStudioModule: WebDeckModule = {
         JSON.stringify({
           apiName: "VTubeStudioPublicAPI",
           apiVersion: "1.0",
-          requestID: crypto.randomUUID(),
+          requestID: Math.random().toString(36).slice(2), //crypto.randomUUID()
           messageType: "HotkeyTriggerRequest",
           data: {
             hotkeyID: params.animationName,
@@ -104,7 +104,7 @@ function createVTubeStudioController(
     data: Record<string, string>,
     onResponse: (message: VTubeStudioMessage) => void,
   ) => {
-    const requestID = crypto.randomUUID();
+    const requestID = Math.random().toString(36).slice(2); //crypto.randomUUID();
     responseHandlers.set(requestID, onResponse);
 
     const didSend = send(

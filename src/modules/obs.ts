@@ -1,3 +1,5 @@
+import CryptoJS from "crypto-js";
+
 import type {
   WebDeckConnectionStatus,
   WebDeckModule,
@@ -66,7 +68,8 @@ export const obsModule: WebDeckModule = {
           op: 6,
           d: {
             requestType: "SetCurrentProgramScene",
-            requestId: crypto.randomUUID(),
+            requestId:  Math.random().toString(36).slice(2),
+             //crypto.randomUUID(),
             requestData: {
               sceneName: params.sceneName,
             },
@@ -228,12 +231,16 @@ async function createObsAuthentication(
   return sha256Base64(`${secret}${challenge}`);
 }
 
-async function sha256Base64(value: string): Promise<string> {
-  const encoded = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
 
-  return bytesToBase64(new Uint8Array(digest));
+async function sha256Base64(value: string): Promise<string> {
+  return CryptoJS.enc.Base64.stringify(CryptoJS.SHA256(value));
 }
+// async function sha256Base64(value: string): Promise<string> {
+//   const encoded = new TextEncoder().encode(value);
+//   const digest = await crypto.subtle.digest("SHA-256", encoded);
+
+//   return bytesToBase64(new Uint8Array(digest));
+// }
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";

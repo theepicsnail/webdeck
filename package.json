@@ -9,7 +9,11 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "typescript": "^5.8.3",
     "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0"
   }
 }
