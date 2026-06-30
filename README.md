@@ -55,6 +55,19 @@ npm.cmd run build
 
 The static site is emitted to `dist/`.
 
+## Testing
+
+```powershell
+npm.cmd test
+npm.cmd run test:watch
+npm.cmd run test:coverage
+```
+
+The suite uses Vitest and jsdom for unit and browser-facing integration tests.
+Connector tests use deterministic fake WebSockets, so OBS, VTube Studio, and
+Warudo do not need to be running. See `TESTING.md` for the complete feature
+inventory, expected edge cases, and the remaining real-browser smoke checks.
+
 ## Module API
 
 Bundled modules and third-party modules use the same browser-side interface.

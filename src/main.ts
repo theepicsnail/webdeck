@@ -6,6 +6,27 @@ import type {
   WebDeckModuleEvent,
   WebDeckModule,
 } from "./modules/types";
+import {
+  clampDeckDimension,
+  clampSpan,
+  createEmptyDeckButtonConfig,
+  effectiveButtonSpan,
+  markOccupiedCells,
+  canButtonOccupySpan,
+  normalizeDeckButtonConfig,
+  normalizeDeckLayout,
+  DEFAULT_DECK_SIZE,
+  MAX_DECK_SIZE,
+  type DeckButtonConfig,
+  type DeckLayoutConfig,
+} from "./app/deck";
+import {
+  normalizeExternalModule,
+  parseExportConfig,
+  type WebDeckExportConfig,
+} from "./app/config";
+import { errorMessage, escapeHtml, formatConsoleValue } from "./app/format";
+import { resizeImageFile } from "./app/image";
 import "./styles.css";
 
 type LogEntry = {
@@ -27,43 +48,12 @@ type ModuleRuntime = {
   enabled: boolean;
 };
 
-type DeckButtonConfig = {
-  label: string;
-  imageDataUrl?: string;
-  imageUrl?: string;
-  columnSpan: number;
-  rowSpan: number;
-  moduleId: string;
-  eventId: string;
-  params: Record<string, string>;
-};
-
-type WebDeckExportConfig = {
-  schemaVersion: 1;
-  exportedAt: string;
-  modules: Array<{
-    id: string;
-    enabled: boolean;
-    config: Record<string, string>;
-  }>;
-  customModuleUrls: string[];
-  deckLayout: DeckLayoutConfig;
-  deckButtons: Array<DeckButtonConfig | undefined>;
-};
-
-type DeckLayoutConfig = {
-  rows: number;
-  columns: number;
-};
-
 const CONFIG_STORAGE_PREFIX = "webdeck.config.";
 const ENABLED_STORAGE_PREFIX = "webdeck.enabled.";
 const CUSTOM_MODULES_STORAGE_KEY = "webdeck.customModules";
 const DECK_STORAGE_KEY = "webdeck.deckButtons";
 const DECK_LAYOUT_STORAGE_KEY = "webdeck.deckLayout";
 const THEME_STORAGE_KEY = "webdeck.theme";
-const DEFAULT_DECK_SIZE = 8;
-const MAX_DECK_SIZE = 16;
 const BUILT_IN_MODULE_URLS = import.meta.env.DEV
   ? ["/src/modules/obs.ts", "/src/modules/warudo.ts", "/src/modules/vtube-studio.ts"]
   : ["./obs.js", "./warudo.js", "./vtube-studio.js"];
@@ -463,6 +453,15 @@ deckConfigPanel.addEventListener("input", (event) => {
   deckButtons[selectedDeckButton] = config;
   saveDeckButtons();
   renderDeckButtons();
+
+  if (input.dataset.deckConfig === "image-url") {
+    const removeImageButton = deckConfigPanel.querySelector<HTMLButtonElement>(
+      '[data-action="remove-image"]',
+    );
+    if (removeImageButton) {
+      removeImageButton.disabled = !deckButtonImageSource(config);
+    }
+  }
 });
 
 deckConfigPanel.addEventListener("change", (event) => {
@@ -489,7 +488,13 @@ deckConfigPanel.addEventListener("change", (event) => {
       ? clampSpan(Number(target.value), deckLayoutConfig.rows)
       : config.rowSpan;
 
-    if (!canButtonOccupySpan(selectedDeckButton, nextColumnSpan, nextRowSpan)) {
+    if (!canButtonOccupySpan(
+      selectedDeckButton,
+      nextColumnSpan,
+      nextRowSpan,
+      deckLayoutConfig,
+      deckButtons,
+    )) {
       addLog("error", "Deck", "That span would cover another configured button.");
       renderLogs();
       renderDeck();
@@ -680,31 +685,6 @@ async function loadCustomModule(rawUrl: string, shouldRemember = true): Promise<
     addLog("error", "System", `Could not load module: ${errorMessage(error)}`);
     render();
   }
-}
-
-function normalizeExternalModule(namespace: ExternalModuleNamespace): WebDeckModule {
-  const candidate = namespace.default ?? namespace.webDeckModule;
-
-  if (!isWebDeckModule(candidate)) {
-    throw new Error("Module does not match the WebDeck module API.");
-  }
-
-  return candidate;
-}
-
-function isWebDeckModule(value: unknown): value is WebDeckModule {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const module = value as Partial<WebDeckModule>;
-
-  return (
-    typeof module.id === "string" &&
-    typeof module.name === "string" &&
-    typeof module.description === "string" &&
-    Array.isArray(module.configFields)
-  );
 }
 
 async function setModuleEnabled(
@@ -904,9 +884,15 @@ function renderDeckButtons(): void {
     const config = deckButtons[index];
     const label = deckButtonLabel(index, config);
     const imageSource = deckButtonImageSource(config);
-    const { columnSpan, rowSpan } = effectiveButtonSpan(index, config, occupied);
+    const { columnSpan, rowSpan } = effectiveButtonSpan(
+      index,
+      config,
+      occupied,
+      deckLayoutConfig,
+      deckButtons,
+    );
 
-    markOccupiedCells(index, columnSpan, rowSpan, occupied);
+    markOccupiedCells(index, columnSpan, rowSpan, occupied, deckLayoutConfig);
 
     buttonMarkup.push(`
       <button
@@ -1135,17 +1121,6 @@ function deckButtonImageSource(config: DeckButtonConfig | undefined): string {
   return config?.imageDataUrl ?? config?.imageUrl ?? "";
 }
 
-function createEmptyDeckButtonConfig(): DeckButtonConfig {
-  return {
-    label: "",
-    columnSpan: 1,
-    rowSpan: 1,
-    moduleId: "",
-    eventId: "",
-    params: {},
-  };
-}
-
 async function updateDeckButtonImage(file: File): Promise<void> {
   if (!file.type.startsWith("image/")) {
     addLog("error", "Deck", "Choose an image file for the button.");
@@ -1177,52 +1152,6 @@ function removeDeckButtonImage(): void {
   delete config.imageUrl;
   saveDeckButtons();
   renderDeck();
-}
-
-async function resizeImageFile(file: File, maxSize: number): Promise<string> {
-  const image = await loadImage(file);
-  const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error("Image resizing is not supported in this browser.");
-  }
-
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(image, 0, 0, width, height);
-
-  return canvas.toDataURL("image/webp", 0.86);
-}
-
-function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-
-    image.addEventListener(
-      "load",
-      () => {
-        URL.revokeObjectURL(url);
-        resolve(image);
-      },
-      { once: true },
-    );
-
-    image.addEventListener(
-      "error",
-      () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("The selected file could not be decoded."));
-      },
-      { once: true },
-    );
-
-    image.src = url;
-  });
 }
 
 function createExportConfig(): WebDeckExportConfig {
@@ -1336,78 +1265,6 @@ async function applyExportConfig(imported: WebDeckExportConfig): Promise<void> {
   }
 }
 
-function parseExportConfig(value: unknown): WebDeckExportConfig {
-  if (!value || typeof value !== "object") {
-    throw new Error("Imported config must contain a JSON object.");
-  }
-
-  const config = value as Partial<WebDeckExportConfig>;
-
-  if (config.schemaVersion !== 1) {
-    throw new Error("Unsupported config version.");
-  }
-
-  if (!Array.isArray(config.modules)) {
-    throw new Error("Import file is missing modules.");
-  }
-
-  if (!Array.isArray(config.customModuleUrls)) {
-    throw new Error("Import file is missing custom module URLs.");
-  }
-
-  if (!Array.isArray(config.deckButtons)) {
-    throw new Error("Import file is missing deck buttons.");
-  }
-
-  const deckLayout = normalizeDeckLayout(config.deckLayout);
-
-  return {
-    schemaVersion: 1,
-    exportedAt: typeof config.exportedAt === "string" ? config.exportedAt : "",
-    modules: config.modules.map(normalizeImportedModuleConfig),
-    customModuleUrls: config.customModuleUrls.filter(
-      (url): url is string => typeof url === "string",
-    ),
-    deckLayout,
-    deckButtons: Array.from(
-      { length: Math.max(config.deckButtons.length, deckLayout.rows * deckLayout.columns) },
-      (_, index) => normalizeDeckButtonConfig(config.deckButtons?.[index]),
-    ),
-  };
-}
-
-function normalizeImportedModuleConfig(
-  value: unknown,
-): WebDeckExportConfig["modules"][number] {
-  if (!value || typeof value !== "object") {
-    throw new Error("Module config entries must be objects.");
-  }
-
-  const moduleConfig = value as Partial<WebDeckExportConfig["modules"][number]>;
-
-  if (typeof moduleConfig.id !== "string") {
-    throw new Error("Module config entries must include an id.");
-  }
-
-  return {
-    id: moduleConfig.id,
-    enabled: moduleConfig.enabled === true,
-    config:
-      moduleConfig.config && typeof moduleConfig.config === "object" && !Array.isArray(moduleConfig.config)
-        ? normalizeStringRecord(moduleConfig.config)
-        : {},
-  };
-}
-
-function normalizeStringRecord(value: object): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, string] =>
-        typeof entry[0] === "string" && typeof entry[1] === "string",
-    ),
-  );
-}
-
 function findEvent(moduleId: string, eventId: string): WebDeckModuleEvent | undefined {
   return findRuntime(moduleId)?.module.events?.find((event) => event.id === eventId);
 }
@@ -1444,40 +1301,6 @@ function readStoredDeckButtons(minimumLength: number): Array<DeckButtonConfig | 
   return Array.from({ length: minimumLength });
 }
 
-function isDeckButtonConfig(value: unknown): value is DeckButtonConfig {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const config = value as Partial<DeckButtonConfig>;
-
-  return (
-    (typeof config.label === "string" || typeof config.label === "undefined") &&
-    typeof config.moduleId === "string" &&
-    typeof config.eventId === "string" &&
-    !!config.params &&
-    typeof config.params === "object" &&
-    !Array.isArray(config.params)
-  );
-}
-
-function normalizeDeckButtonConfig(value: unknown): DeckButtonConfig | undefined {
-  if (!isDeckButtonConfig(value)) {
-    return undefined;
-  }
-
-  return {
-    label: value.label ?? "",
-    imageDataUrl: typeof value.imageDataUrl === "string" ? value.imageDataUrl : undefined,
-    imageUrl: typeof value.imageUrl === "string" ? value.imageUrl : undefined,
-    columnSpan: clampSpan(value.columnSpan, MAX_DECK_SIZE),
-    rowSpan: clampSpan(value.rowSpan, MAX_DECK_SIZE),
-    moduleId: value.moduleId,
-    eventId: value.eventId,
-    params: value.params,
-  };
-}
-
 function saveDeckButtons(): void {
   localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(deckButtons));
 }
@@ -1490,29 +1313,6 @@ function readStoredDeckLayout(): DeckLayoutConfig {
   }
 }
 
-function normalizeDeckLayout(value: unknown): DeckLayoutConfig {
-  if (!value || typeof value !== "object") {
-    return { rows: DEFAULT_DECK_SIZE, columns: DEFAULT_DECK_SIZE };
-  }
-
-  const layout = value as Partial<DeckLayoutConfig>;
-  return {
-    rows: clampDeckDimension(Number(layout.rows)),
-    columns: clampDeckDimension(Number(layout.columns)),
-  };
-}
-
-function clampDeckDimension(value: number): number {
-  return Number.isFinite(value)
-    ? Math.max(1, Math.min(MAX_DECK_SIZE, Math.round(value)))
-    : DEFAULT_DECK_SIZE;
-}
-
-function clampSpan(value: unknown, maximum: number): number {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(1, Math.min(maximum, Math.round(number))) : 1;
-}
-
 function saveDeckLayout(): void {
   localStorage.setItem(DECK_LAYOUT_STORAGE_KEY, JSON.stringify(deckLayoutConfig));
 }
@@ -1522,89 +1322,6 @@ function ensureDeckButtonCapacity(length: number): void {
     deckButtons.push(undefined);
   }
   saveDeckButtons();
-}
-
-function canButtonOccupySpan(index: number, columnSpan: number, rowSpan: number): boolean {
-  const startColumn = index % deckLayoutConfig.columns;
-  const startRow = Math.floor(index / deckLayoutConfig.columns);
-
-  if (
-    startColumn + columnSpan > deckLayoutConfig.columns ||
-    startRow + rowSpan > deckLayoutConfig.rows
-  ) {
-    return false;
-  }
-
-  for (let row = startRow; row < startRow + rowSpan; row += 1) {
-    for (let column = startColumn; column < startColumn + columnSpan; column += 1) {
-      const coveredIndex = row * deckLayoutConfig.columns + column;
-      if (coveredIndex !== index && deckButtons[coveredIndex]) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-function effectiveButtonSpan(
-  index: number,
-  config: DeckButtonConfig | undefined,
-  occupied: Set<number>,
-): { columnSpan: number; rowSpan: number } {
-  const requestedColumns = clampSpan(config?.columnSpan, deckLayoutConfig.columns);
-  const requestedRows = clampSpan(config?.rowSpan, deckLayoutConfig.rows);
-
-  for (let area = requestedColumns * requestedRows; area >= 1; area -= 1) {
-    for (let rowSpan = requestedRows; rowSpan >= 1; rowSpan -= 1) {
-      for (let columnSpan = requestedColumns; columnSpan >= 1; columnSpan -= 1) {
-        if (columnSpan * rowSpan !== area || !canButtonOccupySpan(index, columnSpan, rowSpan)) {
-          continue;
-        }
-
-        const cells = coveredCellIndexes(index, columnSpan, rowSpan);
-        if (cells.every((cellIndex) => cellIndex === index || !occupied.has(cellIndex))) {
-          return { columnSpan, rowSpan };
-        }
-      }
-    }
-  }
-
-  return { columnSpan: 1, rowSpan: 1 };
-}
-
-function coveredCellIndexes(index: number, columnSpan: number, rowSpan: number): number[] {
-  const startColumn = index % deckLayoutConfig.columns;
-  const startRow = Math.floor(index / deckLayoutConfig.columns);
-  const indexes: number[] = [];
-
-  for (let row = startRow; row < startRow + rowSpan; row += 1) {
-    for (let column = startColumn; column < startColumn + columnSpan; column += 1) {
-      indexes.push(row * deckLayoutConfig.columns + column);
-    }
-  }
-
-  return indexes;
-}
-
-function markOccupiedCells(index: number, columnSpan: number, rowSpan: number, occupied: Set<number>): void {
-  for (const cellIndex of coveredCellIndexes(index, columnSpan, rowSpan)) {
-    if (cellIndex !== index) {
-      occupied.add(cellIndex);
-    }
-  }
-}
-
-function formatConsoleValue(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
 }
 
 function findRuntime(moduleId: string | undefined): ModuleRuntime | undefined {
@@ -1690,17 +1407,4 @@ function stateLabel(state: WebDeckConnectionStatus): string {
   }
 
   return "Disabled";
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
