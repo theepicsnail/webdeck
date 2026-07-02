@@ -775,6 +775,20 @@ textarea {
   background: #485e51;
 }
 
+.deck-config-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.danger {
+  background: #a33b2b;
+}
+
+.danger:hover:not(:disabled) {
+  background: #872f22;
+}
+
 .log-panel {
   padding: 16px;
 }

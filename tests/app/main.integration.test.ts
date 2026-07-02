@@ -86,6 +86,13 @@ it("runs the application navigation, theme, deck, import, export, fullscreen, an
   await vi.waitFor(() => expect(document.querySelector("#logList")?.textContent).toContain('{"value":"custom"}'));
   click("#deckEditToggle");
 
+  click('[data-action="delete-button"]');
+  expect(JSON.parse(localStorage.getItem("webdeck.deckButtons")!)[0]).toBeNull();
+  expect(document.querySelector('.deck-button[data-deck-index="0"] span')?.textContent).toBe("1");
+  expect(document.querySelector<HTMLInputElement>('[data-deck-config="label"]')?.value).toBe("");
+  expect(document.querySelector<HTMLSelectElement>('[data-deck-config="module"]')?.value).toBe("");
+  expect(document.querySelector<HTMLButtonElement>('[data-action="delete-button"]')?.disabled).toBe(true);
+
   const rows = document.querySelector<HTMLInputElement>("#deckRowsInput")!;
   const columns = document.querySelector<HTMLInputElement>("#deckColumnsInput")!;
   rows.value = "1";

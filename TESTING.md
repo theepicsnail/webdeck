@@ -228,6 +228,7 @@ Run browser scenarios at desktop and narrow/mobile viewport widths, in light and
 - Selecting another event resets parameters to that event's defaults.
 - Parameter fields honor declared type, placeholder, and required metadata.
 - The event description appears in the panel; otherwise instructional fallback text appears.
+- Deleting a configured button restores the slot to its unconfigured state, clearing its label, image, spans, module, event, and parameters.
 
 **Edge cases**
 
@@ -236,6 +237,7 @@ Run browser scenarios at desktop and narrow/mobile viewport widths, in light and
 - A missing module/event reference remains representable but shows fallback behavior.
 - Switching events discards previously entered parameters for the prior event.
 - Edits create a default config for a previously empty button.
+- Delete is disabled for a button that has no stored configuration.
 
 ### DECK-004 — Button spans and collision handling
 

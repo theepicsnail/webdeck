@@ -544,6 +544,11 @@ deckConfigPanel.addEventListener("click", (event) => {
     return;
   }
 
+  if (button.dataset.action === "delete-button") {
+    deleteDeckButton();
+    return;
+  }
+
   if (button.dataset.action !== "test-event") {
     return;
   }
@@ -1057,7 +1062,17 @@ function renderDeckConfigPanel(): string {
         .map((field) => renderDeckParameterField(field, config.params[field.key] ?? field.defaultValue))
         .join("")}
     </div>
-    <button class="primary" data-action="test-event" type="button">Test Event</button>
+    <div class="deck-config-actions">
+      <button class="primary" data-action="test-event" type="button">Test Event</button>
+      <button
+        class="danger"
+        data-action="delete-button"
+        type="button"
+        ${deckButtons[selectedDeckButton] ? "" : "disabled"}
+      >
+        Delete Button
+      </button>
+    </div>
   `;
 }
 
@@ -1150,6 +1165,16 @@ function removeDeckButtonImage(): void {
 
   delete config.imageDataUrl;
   delete config.imageUrl;
+  saveDeckButtons();
+  renderDeck();
+}
+
+function deleteDeckButton(): void {
+  if (!deckButtons[selectedDeckButton]) {
+    return;
+  }
+
+  deckButtons[selectedDeckButton] = undefined;
   saveDeckButtons();
   renderDeck();
 }
